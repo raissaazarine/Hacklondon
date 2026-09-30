@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+<title>SmartStick SOS</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+<style>
+*{ box-sizing:border-box; margin:0; padding:0; }
+body{
+  background:#07080f; color:#e2e4f0;
+  font-family:'IBM Plex Mono',monospace;
+  display:flex; flex-direction:column; align-items:center;
+  min-height:100dvh; gap:14px; padding:20px;
+}
+h1{ font-size:15px; color:#5a5d7a; letter-spacing:1px; margin-top:4px; }
+
+/* BLE bar */
+#ble-bar{
+  width:100%; max-width:380px;
+  display:flex; align-items:center; justify-content:space-between;
+  background:#0d0e1a; border:1px solid #252840; border-radius:12px;
+  padding:12px 16px;
+}
+#ble-info{ display:flex; align-items:center; gap:8px; font-size:12px; color:#5a5d7a; }
+#ble-dot{ width:8px; height:8px; border-radius:50%; background:#5a5d7a; flex-shrink:0; transition:background .3s; }
+#ble-dot.on  { background:#4fffb0; box-shadow:0 0 6px #4fffb0; }
+#ble-dot.spin{ background:#ffd93d; animation:blink 1s infinite; }
+@keyframes blink{ 0%,100%{opacity:1}50%{opacity:.2} }
+#btn-ble{
+  background:#4fffb0; color:#07080f; border:none; border-radius:8px;
+  padding:8px 14px; font-family:'IBM Plex Mono',monospace;
+  font-size:12px; font-weight:700; cursor:pointer;
+}
+#btn-ble.connected{ background:transparent; color:#ff6b6b; border:1px solid #ff6b6b; }
+
+/* Contact card */
+#contact-card{
+  width:100%; max-width:380px;
+  background:#0d0e1a; border:1px solid #252840; border-radius:14px; padding:16px;
+}
+#contact-card h2{ font-size:11px; color:#5a5d7a; letter-spacing:1px; margin-bottom:12px; }
+.field{ display:flex; flex-direction:column; gap:5px; margin-bottom:10px; }
+.field label{ font-size:11px; color:#5a5d7a; }
+.inp{
+  background:#13152a; border:1px solid #252840; border-radius:8px;
+  padding:10px 12px; color:#e2e4f0;
+  font-family:'IBM Plex Mono',monospace; font-size:13px; outline:none;
+  transition:border-color .2s; width:100%;
+}
+.inp:focus{ border-color:#4fffb0; }
+.inp::placeholder{ color:#3a3d55; }
+.contact-type-row{ display:flex; gap:8px; margin-bottom:10px; }
+.type-btn{
+  flex:1; padding:8px; background:#13152a; border:1px solid #252840;
+  border-radius:8px; color:#5a5d7a; font-family:'IBM Plex Mono',monospace;
+  font-size:11px; cursor:pointer; transition:all .2s; text-align:center;
+}
+.type-btn.active{ border-color:#4fffb0; color:#4fffb0; background:rgba(79,255,176,.08); }
+#btn-save{
+  width:100%; padding:11px; background:rgba(79,255,176,.1);
+  border:1px solid #4fffb0; border-radius:8px; color:#4fffb0;
+  font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:700; cursor:pointer;
+}
+#save-msg{ font-size:10px; color:#4fffb0; text-align:center; min-height:14px; margin-top:6px; }
+
+/* SOS status panel */
+#sos-panel{
+  width:100%; max-width:380px;
+  background:#0d0e1a; border:2px solid #252840; border-radius:14px;
+  padding:24px 16px; text-align:center;
+  display:flex; flex-direction:column; align-items:center; gap:10px;
+  transition:border-color .3s, background .3s;
+}
+#sos-panel.active{
+  border-color:#ff3d5a; background:rgba(255,61,90,.08);
+  animation:sosPulse .5s infinite alternate;
+}
+@keyframes sosPulse{
+  from{ box-shadow:0 0 0 #ff3d5a; }
+  to  { box-shadow:0 0 24px rgba(255,61,90,.5); }
+}
+#sos-emoji{ font-size:52px; line-height:1; }
+#sos-title{ font-size:15px; font-weight:700; letter-spacing:2px; }
+#sos-sub  { font-size:11px; color:#5a5d7a; }
+
+/* Log */
+#log{
+  width:100%; max-width:380px;
+  background:#0d0e1a; border:1px solid #252840; border-radius:12px;
+  padding:10px 12px; font-size:10px; color:#5a5d7a;
+  height:90px; overflow-y:auto; line-height:1.8;
+}
+.lc{color:#4fffb0} .lr{color:#ff3d5a} .ly{color:#ffd93d} .lb{color:#4d9fff}
+</style>
+</head>
+<body>
+
+<h1>🆘 SMARTSTICK SOS</h1>
+
+<!-- BLE -->
+<div id="ble-bar">
+  <div id="ble-info">
+    <div id="ble-dot"></div>
+    <span id="ble-label">Not connected</span>
+  </div>
+  <button id="btn-ble" onclick="connectBLE()">Connect</button>
+</div>
+
+<!-- Emergency Contact -->
+<div id="contact-card">
+  <h2>⚙ EMERGENCY CONTACT</h2>
+
+  <div class="field">
+    <label>Contact Name</label>
+    <input class="inp" id="inp-name" type="text" placeholder="e.g. Mum, Dad, Guardian"/>
+  </div>
+
+  <div class="field">
+    <label>Phone Number (with country code, no +)</label>
+    <input class="inp" id="inp-phone" type="tel" placeholder="e.g. 601112345678"/>
+  </div>
+
+  <div class="field">
+    <label>Contact Method</label>
+    <div class="contact-type-row">
+      <div class="type-btn"        id="type-call"     onclick="setType('call')">📞 Call</div>
+      <div class="type-btn active" id="type-whatsapp" onclick="setType('whatsapp')">💬 WhatsApp</div>
+      <div class="type-btn"        id="type-sms"      onclick="setType('sms')">✉ SMS</div>
+    </div>
+  </div>
+
+  <div class="field" id="msg-field">
+    <label>Message</label>
+    <input class="inp" id="inp-msg" type="text" placeholder="I need help! Please come."/>
+  </div>
+
+  <button id="btn-save" onclick="saveContact()">💾 Save Contact</button>
+  <div id="save-msg"></div>
+</div>
+
+<!-- SOS Status -->
+<div id="sos-panel">
+  <div id="sos-emoji">🔋</div>
+  <div id="sos-title">STANDBY</div>
+  <div id="sos-sub">Connect BLE and save a contact</div>
+</div>
+
+<!-- Log -->
+<div id="log">Ready — connect BLE and save emergency contact<br/></div>
+
+<script>
+const SERVICE_UUID = '12345678-1234-1234-1234-123456789abc';
+const NOTIFY_UUID  = '12345678-1234-1234-1234-123456789ab2';
+
+let bleDevice = null, notifyChar = null, connected = false;
+let contactType = 'call';
+
+// ── Load saved on startup ─────────────────────────────────────
+window.addEventListener('load', () => {
+  const c = JSON.parse(localStorage.getItem('sos_contact') || '{}');
+  if (c.name)  document.getElementById('inp-name').value  = c.name;
+  if (c.phone) document.getElementById('inp-phone').value = c.phone;
+  if (c.msg)   document.getElementById('inp-msg').value   = c.msg;
+  if (c.type)  setType(c.type);
+  else         setType('whatsapp');  // default to WhatsApp
+  if (c.name)  document.getElementById('save-msg').textContent = '✓ Loaded: ' + c.name;
+});
+
+// ── Contact type selector ────────────────────────────────────
+function setType(type) {
+  contactType = type;
+  ['call','whatsapp','sms'].forEach(t => {
+    document.getElementById('type-' + t).classList.toggle('active', t === type);
+  });
+  document.getElementById('msg-field').style.display =
+    (type === 'whatsapp' || type === 'sms') ? 'flex' : 'none';
+}
+
+// ── Save contact ─────────────────────────────────────────────
+function saveContact() {
+  const name  = document.getElementById('inp-name').value.trim();
+  const phone = document.getElementById('inp-phone').value.trim().replace(/\D/g,'');
+  const msg   = document.getElementById('inp-msg').value.trim();
+  if (!name)  { document.getElementById('save-msg').textContent = '⚠ Enter a name'; return; }
+  if (!phone) { document.getElementById('save-msg').textContent = '⚠ Enter a phone number'; return; }
+  localStorage.setItem('sos_contact', JSON.stringify({ name, phone, msg, type: contactType }));
+  document.getElementById('save-msg').textContent = '✅ Saved: ' + name;
+  log('Contact saved: ' + name + ' via ' + contactType, 'lc');
+}
+
+// ── BLE ──────────────────────────────────────────────────────
+async function connectBLE() {
+  if (connected) { if (bleDevice?.gatt.connected) bleDevice.gatt.disconnect(); return; }
+  if (!navigator.bluetooth) { log('Web Bluetooth not supported', 'lr'); return; }
+  const btn = document.getElementById('btn-ble');
+  btn.textContent = 'Scanning...'; btn.disabled = true;
+  document.getElementById('ble-dot').className = 'spin';
+  try {
+    bleDevice = await navigator.bluetooth.requestDevice({
+      filters: [{ name: 'SmartStick' }],
+      optionalServices: [SERVICE_UUID]
+    });
+    bleDevice.addEventListener('gattserverdisconnected', onDisconnect);
+    const server = await bleDevice.gatt.connect();
+    const svc    = await server.getPrimaryService(SERVICE_UUID);
+    notifyChar   = await svc.getCharacteristic(NOTIFY_UUID);
+    await notifyChar.startNotifications();
+    notifyChar.addEventListener('characteristicvaluechanged', onNotify);
+    connected = true;
+    document.getElementById('ble-dot').className = 'on';
+    document.getElementById('ble-label').textContent = bleDevice.name || 'SmartStick';
+    btn.textContent = 'Disconnect'; btn.disabled = false; btn.classList.add('connected');
+    setPanel('🟢', 'READY', 'Hold button 3s on stick to trigger SOS', false);
+    log('Connected ✅ — monitoring for SOS', 'lc');
+  } catch(e) {
+    document.getElementById('ble-dot').className = '';
+    btn.textContent = 'Connect'; btn.disabled = false;
+    log('BLE failed: ' + e.message, 'lr');
+  }
+}
+
+function onDisconnect() {
+  connected = false; notifyChar = null;
+  document.getElementById('ble-dot').className = '';
+  document.getElementById('ble-label').textContent = 'Not connected';
+  const btn = document.getElementById('btn-ble');
+  btn.textContent = 'Connect'; btn.disabled = false; btn.classList.remove('connected');
+  setPanel('🔋', 'DISCONNECTED', 'Reconnect to monitor SOS', false);
+  log('Disconnected', 'ly');
+}
+
+// ── Receive BLE notification ──────────────────────────────────
+function onNotify(e) {
+  const msg = new TextDecoder().decode(e.target.value).trim();
+  log('← ' + msg, 'lb');
+  if (msg === 'SOS') triggerSOS();
+}
+
+// ── SOS trigger ───────────────────────────────────────────────
+function triggerSOS() {
+  const c = JSON.parse(localStorage.getItem('sos_contact') || '{}');
+  if (!c.phone) {
+    log('⚠ No contact saved! Set one above.', 'lr');
+    setPanel('⚠️', 'NO CONTACT!', 'Please save an emergency contact first', true);
+    if (navigator.vibrate) navigator.vibrate([400,100,400,100,400]);
+    return;
+  }
+
+  log('🆘 SOS received! Contacting ' + c.name + ' via ' + c.type, 'lr');
+  setPanel('🆘', 'SOS TRIGGERED!', 'Contacting ' + c.name + '...', true);
+  if (navigator.vibrate) navigator.vibrate([500,100,500,100,500,100,500]);
+
+  if (c.type === 'call') {
+    // Call changed to WhatsApp
+    sendWithLocation(c);
+
+  } else if (c.type === 'whatsapp') {
+    // Build message with GPS location
+    sendWithLocation(c);
+
+  } else if (c.type === 'sms') {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        pos => {
+          const url = `https://maps.google.com/?q=${pos.coords.latitude},${pos.coords.longitude}`;
+          const body = buildMessage(c, url);
+          window.location.href = 'sms:' + c.phone + '?body=' + encodeURIComponent(body);
+        },
+        () => {
+          const body = buildMessage(c, null);
+          window.location.href = 'sms:' + c.phone + '?body=' + encodeURIComponent(body);
+        },
+        { enableHighAccuracy: true, timeout: 5000 }
+      );
+    } else {
+      const body = buildMessage(c, null);
+      window.location.href = 'sms:' + c.phone + '?body=' + encodeURIComponent(body);
+    }
+  }
+
+  // Reset panel after 10s
+  setTimeout(() => setPanel('🟢', 'READY', 'Hold button 3s on stick to trigger SOS', false), 10000);
+}
+
+function sendWithLocation(c) {
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        const url = `https://maps.google.com/?q=${pos.coords.latitude},${pos.coords.longitude}`;
+        const msg = buildMessage(c, url);
+        window.location.href = 'https://wa.me/' + c.phone + '?text=' + encodeURIComponent(msg);
+        log('Opening WhatsApp with location ✅', 'lc');
+      },
+      () => {
+        const msg = buildMessage(c, null);
+        window.location.href = 'https://wa.me/' + c.phone + '?text=' + encodeURIComponent(msg);
+        log('Opening WhatsApp (no location)', 'ly');
+      },
+      { enableHighAccuracy: true, timeout: 5000 }
+    );
+  } else {
+    const msg = buildMessage(c, null);
+    window.location.href = 'https://wa.me/' + c.phone + '?text=' + encodeURIComponent(msg);
+  }
+}
+
+function buildMessage(c, locationUrl) {
+  const base = c.msg || 'I need help! Please come immediately.';
+  let msg = `🆘 SOS - SmartStick Emergency 🆘\n\n${base}`;
+  if (locationUrl) msg += `\n\n📍 Location:\n${locationUrl}`;
+  return msg;
+}
+
+function setPanel(emoji, title, sub, active) {
+  document.getElementById('sos-emoji').textContent = emoji;
+  document.getElementById('sos-title').textContent = title;
+  document.getElementById('sos-sub').textContent   = sub;
+  document.getElementById('sos-panel').classList.toggle('active', active);
+}
+
+function log(msg, cls) {
+  const el = document.getElementById('log');
+  const d  = document.createElement('div');
+  if (cls) d.className = cls;
+  d.textContent = new Date().toLocaleTimeString() + '  ' + msg;
+  el.appendChild(d);
+  el.scrollTop = el.scrollHeight;
+}
+</script>
+</body>
+</html>

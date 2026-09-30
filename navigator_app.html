@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+<title>SmartStick Campus</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&family=Outfit:wght@300;400;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#07080f;
+  --s1:#0d0e1a;
+  --s2:#13152a;
+  --s3:#1c1f38;
+  --border:#252840;
+  --accent:#4fffb0;
+  --accent2:#ff6b6b;
+  --accent3:#ffd93d;
+  --blue:#4d9fff;
+  --text:#e2e4f0;
+  --muted:#5a5d7a;
+  --r:14px;
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif;overflow:hidden}
+#app{height:100dvh;display:flex;flex-direction:column;max-width:500px;margin:0 auto;position:relative}
+
+/* TOPBAR */
+#topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 18px 10px;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--s1)}
+#topbar h1{font-size:17px;font-weight:800;color:var(--accent);letter-spacing:-0.3px;font-family:'IBM Plex Mono',monospace}
+#topbar h1 span{color:var(--muted);font-weight:400}
+#ble-btn{display:flex;align-items:center;gap:7px;background:var(--s2);border:1px solid var(--border);border-radius:20px;padding:6px 12px;cursor:pointer;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);transition:all .2s}
+#ble-btn:hover{border-color:var(--accent);color:var(--accent)}
+#ble-dot{width:7px;height:7px;border-radius:50%;background:var(--muted);transition:background .3s}
+#ble-dot.connected{background:var(--accent);box-shadow:0 0 8px var(--accent)}
+#ble-dot.connecting{background:var(--accent3);animation:blink 1s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+
+/* TABS */
+#tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--s1)}
+.tab{flex:1;padding:11px 0;text-align:center;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer;transition:all .2s;font-family:'IBM Plex Mono',monospace;letter-spacing:.5px;border-bottom:2px solid transparent}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+
+/* SCREENS */
+.screen{display:none;flex:1;flex-direction:column;overflow-y:auto}
+.screen.active{display:flex}
+
+/* ── NAVIGATE SCREEN ─────────────────────────── */
+#screen-nav{gap:0}
+
+/* GPS bar */
+#gps-bar{padding:10px 18px;background:var(--s2);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+#gps-text{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted)}
+#gps-text.ok{color:var(--accent)}
+#gps-text.err{color:var(--accent2)}
+#btn-retry-gps{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--blue);background:none;border:none;cursor:pointer;text-decoration:underline}
+
+/* Room grid */
+#room-grid-wrap{padding:16px 18px;flex-shrink:0}
+#room-grid-wrap h2{font-size:11px;font-family:'IBM Plex Mono',monospace;color:var(--muted);letter-spacing:1px;margin-bottom:12px}
+#room-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.room-btn{
+  background:var(--s2);border:1px solid var(--border);border-radius:var(--r);
+  padding:16px 14px;cursor:pointer;transition:all .2s;text-align:left;
+  display:flex;flex-direction:column;gap:6px;position:relative;overflow:hidden
+}
+.room-btn:hover{border-color:var(--accent);transform:translateY(-1px)}
+.room-btn:active{transform:scale(.97)}
+.room-btn.navigating{border-color:var(--accent);background:rgba(79,255,176,.07)}
+.room-btn::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--accent),var(--blue));opacity:0;transition:opacity .2s}
+.room-btn:hover::before,.room-btn.navigating::before{opacity:1}
+.room-icon{font-size:22px}
+.room-name{font-size:14px;font-weight:700;color:var(--text)}
+.room-dist{font-size:11px;font-family:'IBM Plex Mono',monospace;color:var(--muted)}
+.room-badge{position:absolute;top:8px;right:8px;background:var(--s3);border-radius:6px;padding:2px 6px;font-size:10px;font-family:'IBM Plex Mono',monospace;color:var(--muted)}
+.room-badge.has-loc{background:rgba(79,255,176,.15);color:var(--accent)}
+#no-rooms-msg{padding:40px 18px;text-align:center;color:var(--muted);font-size:14px;line-height:1.6}
+#no-rooms-msg span{display:block;font-size:28px;margin-bottom:12px}
+
+/* Nav active panel */
+#nav-active{display:none;flex-direction:column;flex:1}
+#nav-active.show{display:flex}
+
+#nav-dest-bar{padding:12px 18px;background:var(--s2);border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:space-between}
+#nav-dest-name{font-size:13px;font-weight:700;color:var(--accent)}
+#btn-cancel-nav{background:none;border:1px solid var(--border);border-radius:8px;padding:5px 10px;font-size:11px;color:var(--muted);cursor:pointer;font-family:'IBM Plex Mono',monospace}
+#btn-cancel-nav:hover{border-color:var(--accent2);color:var(--accent2)}
+
+/* Big tap area */
+#tap-zone{
+  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:14px;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;
+  padding:20px;position:relative;overflow:hidden
+}
+#tap-zone::after{
+  content:'';position:absolute;inset:0;
+  background:radial-gradient(circle at center,rgba(79,255,176,.04) 0%,transparent 70%);
+  pointer-events:none
+}
+#tap-zone:active{background:rgba(79,255,176,.04)}
+#tap-hint{font-size:10px;font-family:'IBM Plex Mono',monospace;color:var(--muted);letter-spacing:2px}
+#nav-arrow{font-size:90px;line-height:1;filter:drop-shadow(0 0 20px rgba(79,255,176,.3));transition:transform .3s cubic-bezier(.34,1.56,.64,1)}
+#nav-arrow.pop{animation:pop .35s ease}
+@keyframes pop{0%,100%{transform:scale(1)}50%{transform:scale(1.15)}}
+#nav-dir-label{font-size:28px;font-weight:800;color:var(--accent);letter-spacing:-0.5px}
+#nav-beeps{font-family:'IBM Plex Mono',monospace;font-size:18px;color:var(--blue);letter-spacing:4px;min-height:26px}
+
+/* Compass ring */
+#compass-wrap{padding:0 18px 10px;flex-shrink:0;display:flex;align-items:center;gap:12px}
+#compass-ring{width:48px;height:48px;position:relative;flex-shrink:0}
+#compass-ring svg{width:100%;height:100%}
+#compass-status{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);line-height:1.5}
+#compass-status .bearing{font-size:13px;color:var(--accent3);font-weight:700}
+
+/* Step tracker */
+#step-bar{padding:8px 18px 12px;flex-shrink:0;display:flex;align-items:center;gap:10px;border-top:1px solid var(--border)}
+#step-counter{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted)}
+#step-dots{display:flex;gap:5px;flex:1}
+.step-dot{height:4px;flex:1;background:var(--s3);border-radius:2px;transition:background .3s}
+.step-dot.done{background:var(--accent)}
+.step-dot.current{background:var(--accent3)}
+#dist-remaining{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted)}
+
+/* ── MANAGE SCREEN ───────────────────────────── */
+#screen-manage{gap:0}
+#manage-header{padding:14px 18px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)}
+#manage-header h2{font-size:13px;font-family:'IBM Plex Mono',monospace;color:var(--muted);letter-spacing:.5px}
+
+/* Add room form */
+#add-form{padding:16px 18px;background:var(--s2);border-bottom:1px solid var(--border);flex-shrink:0;display:flex;flex-direction:column;gap:10px}
+#add-form h3{font-size:12px;font-family:'IBM Plex Mono',monospace;color:var(--accent);letter-spacing:1px}
+.form-row{display:flex;gap:8px}
+.inp{flex:1;background:var(--s3);border:1px solid var(--border);border-radius:10px;padding:11px 14px;color:var(--text);font-family:'Outfit',sans-serif;font-size:14px;outline:none;transition:border-color .2s}
+.inp:focus{border-color:var(--accent)}
+.inp::placeholder{color:var(--muted)}
+.inp-icon{width:46px;background:var(--s3);border:1px solid var(--border);border-radius:10px;padding:11px 8px;color:var(--text);font-size:16px;outline:none;text-align:center}
+#btn-capture-gps{width:100%;padding:12px;background:rgba(79,255,176,.12);border:1px solid var(--accent);border-radius:10px;color:var(--accent);font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;cursor:pointer;transition:all .2s;letter-spacing:.5px}
+#btn-capture-gps:hover{background:rgba(79,255,176,.2)}
+#btn-capture-gps:disabled{opacity:.4;cursor:default}
+#captured-coords{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);min-height:16px}
+#captured-coords.ok{color:var(--accent)}
+.btn-add{padding:12px;background:var(--accent);border:none;border-radius:10px;color:#07080f;font-family:'Outfit',sans-serif;font-size:14px;font-weight:800;cursor:pointer;transition:all .2s}
+.btn-add:hover{filter:brightness(1.1)}
+.btn-add:disabled{opacity:.4;cursor:default}
+
+/* Room list */
+#room-list{padding:12px 18px;display:flex;flex-direction:column;gap:8px}
+.manage-card{background:var(--s2);border:1px solid var(--border);border-radius:var(--r);padding:14px;display:flex;align-items:center;gap:12px}
+.manage-card-icon{font-size:20px;width:32px;text-align:center;flex-shrink:0}
+.manage-card-info{flex:1}
+.manage-card-info h3{font-size:14px;font-weight:700}
+.manage-card-info p{font-size:11px;font-family:'IBM Plex Mono',monospace;color:var(--muted);margin-top:2px}
+.manage-card-info p.no-loc{color:var(--accent2)}
+.btn-del{background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;padding:4px;transition:color .2s}
+.btn-del:hover{color:var(--accent2)}
+
+/* Export/Import bar */
+#export-bar{padding:14px 18px;border-top:1px solid var(--border);display:flex;gap:8px;flex-shrink:0;margin-top:auto}
+.btn-io{flex:1;padding:11px;background:var(--s2);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:12px;cursor:pointer;transition:all .2s}
+.btn-io:hover{border-color:var(--accent3);color:var(--accent3)}
+
+/* ARRIVED overlay */
+#arrived-overlay{display:none;position:fixed;inset:0;background:rgba(7,8,15,.9);backdrop-filter:blur(6px);z-index:100;flex-direction:column;align-items:center;justify-content:center;gap:14px}
+#arrived-overlay.show{display:flex}
+#arrived-overlay .big{font-size:72px}
+#arrived-overlay h2{font-size:30px;font-weight:800;color:var(--accent)}
+#arrived-overlay p{color:var(--muted);font-size:13px;font-family:'IBM Plex Mono',monospace}
+#btn-dismiss{margin-top:8px;padding:14px 36px;background:var(--accent);color:#07080f;border:none;border-radius:12px;font-family:'Outfit',sans-serif;font-size:16px;font-weight:800;cursor:pointer}
+
+/* Toast */
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(70px);background:var(--s2);border:1px solid var(--border);border-radius:12px;padding:11px 18px;font-size:13px;font-family:'IBM Plex Mono',monospace;white-space:nowrap;transition:transform .3s cubic-bezier(.34,1.56,.64,1);z-index:999;max-width:90vw}
+#toast.show{transform:translateX(-50%) translateY(0)}
+#toast.ok{border-color:var(--accent);color:var(--accent)}
+#toast.err{border-color:var(--accent2);color:var(--accent2)}
+#toast.warn{border-color:var(--accent3);color:var(--accent3)}
+#toast.info{border-color:var(--blue);color:var(--blue)}
+::-webkit-scrollbar{width:3px}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- TOPBAR -->
+  <div id="topbar">
+    <h1>SmartStick <span>/ Campus</span></h1>
+    <div id="ble-btn" onclick="connectBLE()">
+      <div id="ble-dot"></div>
+      <span id="ble-label">BLE</span>
+    </div>
+  </div>
+
+  <!-- TABS -->
+  <div id="tabs">
+    <div class="tab active" onclick="switchTab('nav')" id="tab-nav">NAVIGATE</div>
+    <div class="tab" onclick="switchTab('manage')" id="tab-manage">MANAGE ROOMS</div>
+  </div>
+
+  <!-- ═══════════ NAVIGATE SCREEN ═══════════ -->
+  <div id="screen-nav" class="screen active">
+
+    <!-- GPS Bar -->
+    <div id="gps-bar">
+      <span id="gps-text">📍 Getting GPS...</span>
+      <button id="btn-retry-gps" onclick="startGPS()">Retry</button>
+    </div>
+
+    <!-- Room Grid -->
+    <div id="room-grid-wrap">
+      <h2>SELECT DESTINATION</h2>
+      <div id="room-grid"></div>
+      <div id="no-rooms-msg" style="display:none">
+        <span>🗺️</span>
+        No rooms added yet.<br>Go to <b>Manage Rooms</b> tab<br>to add your campus locations.
+      </div>
+    </div>
+
+    <!-- Active Navigation Panel (hidden until nav starts) -->
+    <div id="nav-active">
+      <div id="nav-dest-bar">
+        <span id="nav-dest-name">—</span>
+        <button id="btn-cancel-nav" onclick="cancelNav()">✕ Cancel</button>
+      </div>
+
+      <!-- AUTO NAV DISPLAY (no tap needed) -->
+      <div id="tap-zone">
+        <div id="tap-hint">🔄 AUTO-TRACKING DIRECTION</div>
+        <div id="nav-arrow">⬆️</div>
+        <div id="nav-dir-label">Starting...</div>
+        <div id="nav-beeps"></div>
+      </div>
+
+      <!-- Compass -->
+      <div id="compass-wrap">
+        <div id="compass-ring">
+          <svg viewBox="0 0 48 48">
+            <circle cx="24" cy="24" r="22" fill="none" stroke="#252840" stroke-width="2"/>
+            <circle cx="24" cy="24" r="22" fill="none" stroke="#4fffb0" stroke-width="2"
+              stroke-dasharray="138" stroke-dashoffset="138" id="compass-arc" style="transition:stroke-dashoffset .5s;transform-origin:center;transform:rotate(-90deg)"/>
+            <polygon id="compass-needle" points="24,6 27,24 24,28 21,24"
+              fill="#ffd93d" style="transform-origin:center;transition:transform .4s ease"/>
+            <circle cx="24" cy="24" r="3" fill="#252840"/>
+          </svg>
+        </div>
+        <div id="compass-status">
+          <div>Compass: <span id="compass-heading">—°</span></div>
+          <div>Target: <span class="bearing" id="target-bearing">—°</span></div>
+          <div id="compass-hint" style="color:var(--accent3)">—</div>
+        </div>
+      </div>
+
+      <!-- Step bar -->
+      <div id="step-bar">
+        <span id="step-counter">⚡ Live</span>
+        <div id="step-dots"></div>
+        <span id="dist-remaining">—m</span>
+      </div>
+
+      <!-- Debug panel — remove once confirmed working -->
+      <div id="debug-panel" style="padding:8px 18px;background:#0a0a0f;border-top:1px solid #252840;font-family:'IBM Plex Mono',monospace;font-size:10px;color:#5a5d7a;line-height:1.8">
+        <div>GPS: <span id="dbg-gps">—</span></div>
+        <div>Heading: <span id="dbg-heading">—</span> | Target bearing: <span id="dbg-bearing">—</span></div>
+        <div>Diff: <span id="dbg-diff">—</span> | Dist: <span id="dbg-dist">—</span></div>
+        <div>Last cmd: <span id="dbg-cmd" style="color:#4fffb0">—</span> | BLE: <span id="dbg-ble">—</span></div>
+      </div>
+    </div>
+
+  </div><!-- /screen-nav -->
+
+  <!-- ═══════════ MANAGE SCREEN ═══════════ -->
+  <div id="screen-manage" class="screen">
+
+    <div id="manage-header">
+      <h2>CAMPUS ROOMS</h2>
+    </div>
+
+    <!-- Add Room Form -->
+    <div id="add-form">
+      <h3>+ ADD ROOM</h3>
+      <div class="form-row">
+        <input class="inp-icon" id="inp-icon" type="text" value="🚪" maxlength="2"/>
+        <input class="inp" id="inp-name" type="text" placeholder="Room name (e.g. UCL 1)"/>
+      </div>
+      <button id="btn-capture-gps" onclick="captureGPS()">📍 Stand at room door → Capture GPS</button>
+      <div id="captured-coords">No location captured yet</div>
+      <div class="form-row">
+        <button class="btn-add" onclick="addRoom()" style="flex:1">Add Room</button>
+      </div>
+    </div>
+
+    <!-- Room List -->
+    <div id="room-list"></div>
+
+    <!-- Export / Import -->
+    <div id="export-bar">
+      <button class="btn-io" onclick="exportMap()">⬆ Export Map</button>
+      <button class="btn-io" onclick="importMap()">⬇ Import Map</button>
+      <input type="file" id="import-file" accept=".json" style="display:none" onchange="handleImport(event)"/>
+    </div>
+
+  </div><!-- /screen-manage -->
+
+</div><!-- /app -->
+
+<!-- Arrived Overlay -->
+<div id="arrived-overlay">
+  <div class="big">🎯</div>
+  <h2>Arrived!</h2>
+  <p id="arrived-room-name">You reached your destination.</p>
+  <button id="btn-dismiss" onclick="dismissArrived()">Done</button>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════════════════════
+//  SmartStick Campus Navigator
+//  Custom indoor map — walk & tap to record rooms
+//  Compass-assisted + tap-to-advance navigation
+// ══════════════════════════════════════════════════════════
+
+const BLE_SERVICE_UUID     = '12345678-1234-1234-1234-123456789abc';
+const BLE_CMD_CHAR_UUID    = '12345678-1234-1234-1234-123456789ab1';
+const BLE_NOTIFY_CHAR_UUID = '12345678-1234-1234-1234-123456789ab2';
+
+// ── State ─────────────────────────────────────────────────
+let bleDevice = null, cmdChar = null, notifyChar = null;
+let bleConnected = false;
+let userLat = null, userLng = null, userHeading = null;
+let capturedLat = null, capturedLng = null;
+let rooms = [];          // [{id, name, icon, lat, lng}]
+let navSteps = [];       // [{cmd, label}]
+let currentStep = 0;
+let destRoom = null;
+let watchId = null;
+
+// ── Navigation step definitions ──────────────────────────
+const DIR = {
+  R: { label:'TURN RIGHT', arrow:'➡️',  beeps:'♪',       cmd:'R' },
+  L: { label:'TURN LEFT',  arrow:'⬅️',  beeps:'♪ ♪',     cmd:'L' },
+  S: { label:'GO STRAIGHT',arrow:'⬆️',  beeps:'♪ ♪ ♪',   cmd:'S' },
+  U: { label:'U-TURN',     arrow:'🔄',  beeps:'♪ ♪ ♪ ♪', cmd:'U' },
+  A: { label:'ARRIVED!',   arrow:'🎯',  beeps:'♪♪♪♪♪',   cmd:'A' },
+};
+
+// ══════════════════════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', () => {
+  loadRooms();
+  startGPS();
+  startCompass();
+  if (!navigator.bluetooth) toast('Web Bluetooth not supported. Use Android Chrome.', 'err', 5000);
+});
+
+// ══════════════════════════════════════════════════════════
+//  BLE
+// ══════════════════════════════════════════════════════════
+async function connectBLE() {
+  if (bleConnected) { disconnectBLE(); return; }
+  setBleDot('connecting'); toast('Scanning for SmartStick...', 'info');
+  try {
+    bleDevice = await navigator.bluetooth.requestDevice({
+      filters: [{ name: 'SmartStick' }],
+      optionalServices: [BLE_SERVICE_UUID]
+    });
+    bleDevice.addEventListener('gattserverdisconnected', onBleDisconnect);
+    const server = await bleDevice.gatt.connect();
+    const svc    = await server.getPrimaryService(BLE_SERVICE_UUID);
+    cmdChar      = await svc.getCharacteristic(BLE_CMD_CHAR_UUID);
+    notifyChar   = await svc.getCharacteristic(BLE_NOTIFY_CHAR_UUID);
+    await notifyChar.startNotifications();
+    notifyChar.addEventListener('characteristicvaluechanged', e => {
+      const v = new TextDecoder().decode(e.target.value).trim();
+      if (v === 'SOS') toast('⚠️ SOS on stick!', 'err', 5000);
+    });
+    bleConnected = true;
+    setBleDot('connected');
+    toast('SmartStick connected!', 'ok');
+  } catch(e) {
+    setBleDot('off');
+    toast('BLE failed: ' + e.message, 'err');
+  }
+}
+function onBleDisconnect() {
+  bleConnected = false; cmdChar = null; notifyChar = null;
+  setBleDot('off'); toast('Disconnected', 'warn');
+}
+function disconnectBLE() {
+  if (bleDevice?.gatt.connected) bleDevice.gatt.disconnect();
+  onBleDisconnect();
+}
+function setBleDot(s) {
+  const d = document.getElementById('ble-dot');
+  const l = document.getElementById('ble-label');
+  d.className = s === 'connected' ? 'connected' : s === 'connecting' ? 'connecting' : '';
+  l.textContent = s === 'connected' ? 'Connected' : s === 'connecting' ? 'Connecting' : 'BLE';
+}
+async function sendCmd(cmd) {
+  if (!bleConnected || !cmdChar) return;
+  try { await cmdChar.writeValueWithoutResponse(new TextEncoder().encode(cmd)); }
+  catch(e) { console.warn('BLE send error:', e); }
+}
+
+// ══════════════════════════════════════════════════════════
+//  GPS
+// ══════════════════════════════════════════════════════════
+function startGPS() {
+  const el = document.getElementById('gps-text');
+  el.textContent = '📍 Getting GPS...';
+  el.className = '';
+  if (!navigator.geolocation) { el.textContent = '❌ GPS not supported'; el.className = 'err'; return; }
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      userLat = pos.coords.latitude;
+      userLng = pos.coords.longitude;
+      el.textContent = `📍 GPS OK  (±${Math.round(pos.coords.accuracy)}m)`;
+      el.className = 'ok';
+      refreshRoomGrid(); // update distances once we have location
+    },
+    err => {
+      el.textContent = '⚠️ GPS denied — distances unavailable';
+      el.className = 'err';
+      refreshRoomGrid();
+    },
+    { enableHighAccuracy: true, timeout: 12000 }
+  );
+  // Also watch for live updates during nav
+  if (watchId) navigator.geolocation.clearWatch(watchId);
+  watchId = navigator.geolocation.watchPosition(
+    pos => {
+      userLat = pos.coords.latitude;
+      userLng = pos.coords.longitude;
+      updateDistRemaining();
+      if (navActive) autoNavTick(); // re-check direction on every GPS update
+    },
+    () => {},
+    { enableHighAccuracy: true, maximumAge: 1000 }
+  );
+}
+
+// ══════════════════════════════════════════════════════════
+//  COMPASS
+// ══════════════════════════════════════════════════════════
+function startCompass() {
+  if (typeof DeviceOrientationEvent !== 'undefined' &&
+      typeof DeviceOrientationEvent.requestPermission === 'function') {
+    // iOS 13+ requires permission
+    DeviceOrientationEvent.requestPermission().then(s => {
+      if (s === 'granted') window.addEventListener('deviceorientation', onOrientation, true);
+    }).catch(() => {});
+  } else {
+    window.addEventListener('deviceorientation', onOrientation, true);
+  }
+}
+
+function onOrientation(e) {
+  let heading = e.webkitCompassHeading || (e.alpha != null ? 360 - e.alpha : null);
+  if (heading == null) return;
+  userHeading = Math.round(heading);
+  document.getElementById('compass-heading').textContent = userHeading + '°';
+  document.getElementById('compass-needle').style.transform = `rotate(${userHeading}deg)`;
+  // Update compass hint whenever navigating (no navSteps check needed)
+  if (navActive && destRoom) updateCompassHint();
+}
+
+function updateCompassHint() {
+  if (!userLat || !destRoom?.lat || userHeading === null) return;
+
+  const bearing = getBearing(userLat, userLng, destRoom.lat, destRoom.lng);
+  const diff    = ((bearing - userHeading + 540) % 360) - 180;
+
+  // Update display
+  document.getElementById('target-bearing').textContent = Math.round(bearing) + '°';
+
+  // Arc fill
+  const pct = Math.abs(diff) / 180;
+  document.getElementById('compass-arc').style.strokeDashoffset = 138 * pct;
+
+  // Hint text
+  let hint = '';
+  if (Math.abs(diff) < 20)  hint = '✅ Facing destination';
+  else if (diff > 0)        hint = `↻ Turn right ${Math.round(diff)}°`;
+  else                      hint = `↺ Turn left ${Math.round(-diff)}°`;
+  document.getElementById('compass-hint').textContent = hint;
+}
+
+function getBearing(lat1, lng1, lat2, lng2) {
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const y = Math.sin(dLng) * Math.cos(lat2 * Math.PI / 180);
+  const x = Math.cos(lat1 * Math.PI / 180) * Math.sin(lat2 * Math.PI / 180) -
+            Math.sin(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.cos(dLng);
+  return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+}
+
+function haversine(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function updateDistRemaining(dist) {
+  if (dist === undefined) {
+    if (!userLat || !destRoom?.lat) return;
+    dist = haversine(userLat, userLng, destRoom.lat, destRoom.lng);
+  }
+  const el = document.getElementById('dist-remaining');
+  if (el) el.textContent = dist < 1000 ? Math.round(dist) + 'm away' : (dist/1000).toFixed(2) + 'km away';
+}
+
+// ══════════════════════════════════════════════════════════
+//  ROOMS — STORAGE
+// ══════════════════════════════════════════════════════════
+function loadRooms() {
+  try { rooms = JSON.parse(localStorage.getItem('campus_rooms') || '[]'); }
+  catch { rooms = []; }
+  refreshRoomGrid();
+  refreshRoomList();
+}
+
+function saveRooms() {
+  localStorage.setItem('campus_rooms', JSON.stringify(rooms));
+}
+
+// ══════════════════════════════════════════════════════════
+//  MANAGE — ADD / DELETE ROOMS
+// ══════════════════════════════════════════════════════════
+async function captureGPS() {
+  const btn = document.getElementById('btn-capture-gps');
+  const info = document.getElementById('captured-coords');
+  btn.disabled = true;
+  btn.textContent = '⏳ Capturing...';
+  info.textContent = 'Getting GPS fix...';
+  info.className = '';
+
+  await new Promise(res => {
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        capturedLat = pos.coords.latitude;
+        capturedLng = pos.coords.longitude;
+        info.textContent = `✓ ${capturedLat.toFixed(6)}, ${capturedLng.toFixed(6)}  (±${Math.round(pos.coords.accuracy)}m)`;
+        info.className = 'ok';
+        res();
+      },
+      err => {
+        info.textContent = '❌ GPS failed: ' + err.message;
+        info.className = '';
+        capturedLat = null; capturedLng = null;
+        res();
+      },
+      { enableHighAccuracy: true, timeout: 12000 }
+    );
+  });
+  btn.disabled = false;
+  btn.textContent = '📍 Stand at room door → Capture GPS';
+}
+
+function addRoom() {
+  const name = document.getElementById('inp-name').value.trim();
+  const icon = document.getElementById('inp-icon').value.trim() || '🚪';
+  if (!name) { toast('Enter a room name', 'warn'); return; }
+  const room = {
+    id: Date.now().toString(),
+    name, icon,
+    lat: capturedLat,
+    lng: capturedLng
+  };
+  rooms.push(room);
+  saveRooms();
+  refreshRoomGrid();
+  refreshRoomList();
+  // Reset form
+  document.getElementById('inp-name').value = '';
+  document.getElementById('inp-icon').value = '🚪';
+  document.getElementById('captured-coords').textContent = 'No location captured yet';
+  document.getElementById('captured-coords').className = '';
+  capturedLat = null; capturedLng = null;
+  toast('Room added: ' + name, 'ok');
+}
+
+function deleteRoom(id) {
+  rooms = rooms.filter(r => r.id !== id);
+  saveRooms();
+  refreshRoomGrid();
+  refreshRoomList();
+  toast('Room deleted', 'warn');
+}
+
+// ══════════════════════════════════════════════════════════
+//  RENDER ROOMS
+// ══════════════════════════════════════════════════════════
+function refreshRoomGrid() {
+  const grid = document.getElementById('room-grid');
+  const noMsg = document.getElementById('no-rooms-msg');
+  grid.innerHTML = '';
+  if (!rooms.length) { noMsg.style.display = 'block'; return; }
+  noMsg.style.display = 'none';
+  rooms.forEach(room => {
+    let dist = '—';
+    if (userLat && room.lat) {
+      const d = haversine(userLat, userLng, room.lat, room.lng);
+      dist = d < 1000 ? Math.round(d) + 'm' : (d/1000).toFixed(1) + 'km';
+    }
+    const btn = document.createElement('div');
+    btn.className = 'room-btn' + (destRoom?.id === room.id ? ' navigating' : '');
+    btn.innerHTML = `
+      <span class="room-badge ${room.lat ? 'has-loc' : ''}">
+        ${room.lat ? 'GPS ✓' : 'No GPS'}
+      </span>
+      <div class="room-icon">${room.icon}</div>
+      <div class="room-name">${room.name}</div>
+      <div class="room-dist">${dist}</div>
+    `;
+    btn.onclick = () => startNavTo(room);
+    grid.appendChild(btn);
+  });
+}
+
+function refreshRoomList() {
+  const list = document.getElementById('room-list');
+  list.innerHTML = '';
+  if (!rooms.length) {
+    list.innerHTML = '<div style="padding:20px 18px;color:var(--muted);font-size:13px;text-align:center">No rooms yet. Add one above!</div>';
+    return;
+  }
+  rooms.forEach(room => {
+    const card = document.createElement('div');
+    card.className = 'manage-card';
+    card.innerHTML = `
+      <div class="manage-card-icon">${room.icon}</div>
+      <div class="manage-card-info">
+        <h3>${room.name}</h3>
+        <p class="${room.lat ? '' : 'no-loc'}">
+          ${room.lat ? `${room.lat.toFixed(5)}, ${room.lng.toFixed(5)}` : '⚠ No GPS location set'}
+        </p>
+      </div>
+      <button class="btn-del" onclick="deleteRoom('${room.id}')" title="Delete">✕</button>
+    `;
+    list.appendChild(card);
+  });
+}
+
+// ══════════════════════════════════════════════════════════
+//  NAVIGATION — FULLY AUTOMATIC
+//
+//  Logic every 2 seconds while navigating:
+//    1. Get bearing from current GPS → destination
+//    2. Compare with phone compass heading
+//    3. Calculate angle difference (diff)
+//       diff > +25°  → Turn RIGHT → beep 1x → send "R"
+//       diff < -25°  → Turn LEFT  → beep 2x → send "L"
+//       |diff| < 25° → Go STRAIGHT → beep 3x → send "S"
+//    4. If distance < ARRIVE_THRESHOLD → Arrived → beep 5x → send "A"
+//
+//  Beep throttle: only send new command when direction CHANGES
+//  or every REPEAT_INTERVAL seconds to remind user
+// ══════════════════════════════════════════════════════════
+
+const ARRIVE_THRESHOLD = 4;    // metres — tighter arrival detection
+const CHECK_INTERVAL   = 1000; // ms — check every 1s
+const REPEAT_INTERVAL  = 5000; // ms — re-beep same direction every 5s
+const TURN_THRESHOLD   = 45;   // degrees — back to working value
+const CONFIRM_TICKS    = 3;    // must see same direction 3 times before firing
+
+let navTimer       = null;
+let lastSentCmd    = '';
+let lastSentTime   = 0;
+let navActive      = false;
+let pendingCmd     = '';
+let pendingCount   = 0;
+
+function startNavTo(room) {
+  if (!bleConnected) { toast('Connect SmartStick first!', 'warn'); return; }
+  if (!room.lat)     { toast('No GPS for ' + room.name + '. Capture its location first.', 'warn', 4000); return; }
+  if (!userLat)      { toast('Your GPS not ready yet. Wait a moment.', 'warn'); return; }
+
+  destRoom     = room;
+  navActive    = true;
+  lastSentCmd  = '';
+  lastSentTime = 0;
+  pendingCmd   = '';
+  pendingCount = 0;
+
+  document.getElementById('nav-dest-name').textContent     = room.icon + ' ' + room.name;
+  document.getElementById('arrived-room-name').textContent = 'You reached: ' + room.name;
+  document.getElementById('nav-active').classList.add('show');
+  document.getElementById('room-grid-wrap').style.display  = 'none';
+  document.getElementById('tap-zone').style.cursor         = 'default';
+
+  // Show initial state
+  setNavDisplay('S', 'Starting navigation...');
+  updateDistRemaining();
+  refreshRoomGrid();
+  toast('Navigation started → auto-tracking', 'ok');
+
+  // Start auto-check loop
+  navTimer = setInterval(autoNavTick, CHECK_INTERVAL);
+  autoNavTick(); // run immediately
+}
+
+async function autoNavTick() {
+  if (!navActive || !destRoom) return;
+
+  // ── Live debug output ─────────────────────────────────
+  document.getElementById('dbg-gps').textContent =
+    userLat ? `${userLat.toFixed(5)}, ${userLng.toFixed(5)}` : 'no fix';
+  document.getElementById('dbg-heading').textContent =
+    userHeading !== null ? userHeading + '°' : 'no compass';
+  document.getElementById('dbg-ble').textContent =
+    bleConnected ? 'connected' : 'NOT connected';
+
+  // ── Check arrived ─────────────────────────────────────
+  if (userLat && destRoom.lat) {
+    const dist = haversine(userLat, userLng, destRoom.lat, destRoom.lng);
+    updateDistRemaining(dist);
+
+    // Debug
+    const bearing = getBearing(userLat, userLng, destRoom.lat, destRoom.lng);
+    const diff    = ((bearing - userHeading + 540) % 360) - 180;
+    document.getElementById('dbg-bearing').textContent = Math.round(bearing) + '°';
+    document.getElementById('dbg-diff').textContent    = Math.round(diff) + '°';
+    document.getElementById('dbg-dist').textContent    = Math.round(dist) + 'm';
+
+    if (dist <= ARRIVE_THRESHOLD) {
+      triggerArrived();
+      return;
+    }
+  }
+
+  // ── Calculate required direction ──────────────────────
+  const cmd = calcDirection();
+  const now = Date.now();
+  document.getElementById('dbg-cmd').textContent = cmd;
+
+  // Smoothing: only commit to a new direction after CONFIRM_TICKS consistent readings
+  if (cmd === pendingCmd) {
+    pendingCount++;
+  } else {
+    pendingCmd   = cmd;
+    pendingCount = 1;
+  }
+
+  const confirmed    = pendingCount >= CONFIRM_TICKS;
+  const dirChanged   = confirmed && cmd !== lastSentCmd;
+  const timeToRepeat = (now - lastSentTime) >= REPEAT_INTERVAL;
+
+  if (dirChanged || timeToRepeat) {
+    lastSentCmd  = cmd;
+    lastSentTime = now;
+    await sendCmd(cmd);
+    setNavDisplay(cmd);
+    updateCompassHint();
+  }
+}
+
+function calcDirection() {
+  if (userHeading === null || !userLat || !destRoom?.lat) return 'S';
+
+  const bearing = getBearing(userLat, userLng, destRoom.lat, destRoom.lng);
+  const diff    = ((bearing - userHeading + 540) % 360) - 180;
+
+  // Hysteresis: once turning, need to come within INNER_THRESHOLD
+  // to go back to straight — prevents rapid L/S/R flipping
+  const INNER = TURN_THRESHOLD - 15;  // 30° — must reach this to re-center
+  if (lastSentCmd === 'R') {
+    return diff > INNER  ? 'R' : diff < -TURN_THRESHOLD ? 'L' : 'S';
+  }
+  if (lastSentCmd === 'L') {
+    return diff < -INNER ? 'L' : diff > TURN_THRESHOLD  ? 'R' : 'S';
+  }
+
+  // Default: use full threshold
+  if (diff >  TURN_THRESHOLD) return 'R';
+  if (diff < -TURN_THRESHOLD) return 'L';
+  return 'S';
+}
+
+function setNavDisplay(cmd, overrideLabel) {
+  const d = DIR[cmd] || DIR.S;
+  const arrow = document.getElementById('nav-arrow');
+  arrow.textContent = d.arrow;
+  arrow.classList.remove('pop');
+  void arrow.offsetWidth;
+  arrow.classList.add('pop');
+  document.getElementById('nav-dir-label').textContent = overrideLabel || d.label;
+  document.getElementById('nav-beeps').textContent     = d.beeps;
+}
+
+function cancelNav() {
+  navActive = false;
+  clearInterval(navTimer);
+  navTimer = null;
+  destRoom = null;
+  lastSentCmd = '';
+  document.getElementById('nav-active').classList.remove('show');
+  document.getElementById('room-grid-wrap').style.display = 'block';
+  sendCmd('X');
+  refreshRoomGrid();
+}
+
+function triggerArrived() {
+  navActive = false;
+  clearInterval(navTimer);
+  navTimer = null;
+  sendCmd('A');
+  setNavDisplay('A');
+  setTimeout(() => document.getElementById('arrived-overlay').classList.add('show'), 800);
+}
+
+function dismissArrived() {
+  document.getElementById('arrived-overlay').classList.remove('show');
+  cancelNav();
+}
+
+// ── Keep these but simplify (no longer step-based) ────────
+function renderStepDots() {}   // not used in auto mode
+function advanceStep()    {}   // tap does nothing now
+
+// ══════════════════════════════════════════════════════════
+//  EXPORT / IMPORT MAP
+// ══════════════════════════════════════════════════════════
+function exportMap() {
+  const data = JSON.stringify({ version: 1, rooms }, null, 2);
+  const blob = new Blob([data], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = 'campus_map.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('Map exported!', 'ok');
+}
+
+function importMap() {
+  document.getElementById('import-file').click();
+}
+
+function handleImport(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if (!data.rooms || !Array.isArray(data.rooms)) throw new Error('Invalid format');
+      rooms = data.rooms;
+      saveRooms();
+      refreshRoomGrid();
+      refreshRoomList();
+      toast(`Imported ${rooms.length} rooms!`, 'ok');
+    } catch(err) {
+      toast('Import failed: invalid file', 'err');
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+}
+
+// ══════════════════════════════════════════════════════════
+//  UI HELPERS
+// ══════════════════════════════════════════════════════════
+function switchTab(name) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('screen-' + name).classList.add('active');
+  document.getElementById('tab-' + name).classList.add('active');
+}
+
+let toastT = null;
+function toast(msg, type = 'info', ms = 3000) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show ' + type;
+  clearTimeout(toastT);
+  toastT = setTimeout(() => el.classList.remove('show'), ms);
+}
+</script>
+</body>
+</html>

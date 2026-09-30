@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+<title>Ultrasonic Test</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+<style>
+*{ box-sizing:border-box; margin:0; padding:0; }
+body{
+  background:#07080f; color:#e2e4f0;
+  font-family:'IBM Plex Mono',monospace;
+  display:flex; flex-direction:column; align-items:center;
+  justify-content:center; min-height:100dvh; gap:20px; padding:24px;
+}
+h1{ font-size:16px; color:#5a5d7a; letter-spacing:1px; }
+
+#status-circle{
+  width:200px; height:200px; border-radius:50%;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:8px; border:3px solid #252840; transition: background 0.3s, border-color 0.3s;
+  background: #13152a;
+}
+#status-circle.clear  { border-color:#4fffb0; background:rgba(79,255,176,0.07); }
+#status-circle.notice { border-color:#ffd93d; background:rgba(255,217,61,0.07); }
+#status-circle.warn   { border-color:#ff9500; background:rgba(255,149,0,0.1); }
+#status-circle.danger { border-color:#ff3d5a; background:rgba(255,61,90,0.15); animation:pulse 0.4s infinite alternate; }
+@keyframes pulse{ from{box-shadow:0 0 0px #ff3d5a} to{box-shadow:0 0 30px #ff3d5a} }
+
+#status-emoji { font-size:56px; line-height:1; }
+#status-label { font-size:14px; font-weight:700; letter-spacing:2px; }
+#status-dist  { font-size:12px; color:#5a5d7a; }
+
+/* Vibration unlock banner — shown until user taps */
+#vibe-unlock{
+  width:100%; max-width:360px;
+  background:rgba(255,217,61,0.12); border:1px solid #ffd93d;
+  border-radius:12px; padding:14px 16px;
+  font-size:12px; color:#ffd93d; text-align:center; line-height:1.6;
+  cursor:pointer;
+}
+#vibe-unlock.unlocked{ background:rgba(79,255,176,0.1); border-color:#4fffb0; color:#4fffb0; }
+
+#log{
+  width:100%; max-width:360px; background:#0d0e1a;
+  border:1px solid #252840; border-radius:12px;
+  padding:12px; font-size:11px; color:#5a5d7a;
+  height:120px; overflow-y:auto; line-height:1.8;
+}
+.log-danger{ color:#ff3d5a; } .log-warn{ color:#ff9500; }
+.log-notice{ color:#ffd93d; } .log-clear{ color:#4fffb0; }
+.log-info  { color:#4d9fff; }
+
+#btn-ble{
+  width:100%; max-width:360px; padding:16px; border-radius:12px;
+  background:#4fffb0; color:#07080f;
+  font-family:'IBM Plex Mono',monospace; font-size:14px; font-weight:700;
+  border:none; cursor:pointer;
+}
+#btn-ble.connected{ background:#1c1f38; color:#4fffb0; border:1px solid #4fffb0; }
+</style>
+</head>
+<body>
+
+<h1>🦯 ULTRASONIC TEST</h1>
+
+<div id="status-circle">
+  <div id="status-emoji">📡</div>
+  <div id="status-label">WAITING</div>
+  <div id="status-dist">Connect BLE first</div>
+</div>
+
+<!-- Tap this to unlock vibration -->
+<div id="vibe-unlock" onclick="unlockVibration()">
+  ⚠️ TAP HERE FIRST to unlock vibration<br/>
+  <small>(Chrome requires a tap before vibration works)</small>
+</div>
+
+<div id="log">Waiting for BLE connection...<br/></div>
+
+<button id="btn-ble" onclick="connectBLE()">📡 Connect SmartStick</button>
+
+<script>
+const SERVICE_UUID = '12345678-1234-1234-1234-123456789abc';
+const NOTIFY_UUID  = '12345678-1234-1234-1234-123456789ab2';
+
+let bleDevice = null, notifyChar = null, connected = false;
+let vibrationUnlocked = false;
+
+// Vibration patterns
+const VIBE = {
+  CLEAR:  null,
+  NOTICE: [100],
+  WARN:   [200, 100, 200],
+  DANGER: [100,50, 100,50, 100,50, 100,50, 100],
+};
+
+// ── UNLOCK VIBRATION ─────────────────────────────────────────
+// Chrome requires at least one user gesture before vibrate() works
+function unlockVibration() {
+  if (!navigator.vibrate) {
+    document.getElementById('vibe-unlock').innerHTML =
+      '❌ Vibration not supported on this device/browser';
+    log('navigator.vibrate not available on this device', 'danger');
+    return;
+  }
+  // Test vibrate with a short buzz
+  const result = navigator.vibrate(200);
+  if (result) {
+    vibrationUnlocked = true;
+    document.getElementById('vibe-unlock').innerHTML = '✅ Vibration unlocked!';
+    document.getElementById('vibe-unlock').classList.add('unlocked');
+    log('Vibration unlocked ✅', 'clear');
+  } else {
+    document.getElementById('vibe-unlock').innerHTML =
+      '❌ Vibration failed — check phone silent mode or browser settings';
+    log('vibrate() returned false — check silent/do-not-disturb mode', 'danger');
+  }
+}
+
+// ── BLE ──────────────────────────────────────────────────────
+async function connectBLE() {
+  if (!navigator.bluetooth) { log('Web Bluetooth not supported', 'danger'); return; }
+  const btn = document.getElementById('btn-ble');
+  btn.textContent = 'Scanning...'; btn.disabled = true;
+  try {
+    bleDevice = await navigator.bluetooth.requestDevice({
+      filters: [{ name: 'SmartStick' }],
+      optionalServices: [SERVICE_UUID]
+    });
+    bleDevice.addEventListener('gattserverdisconnected', onDisconnect);
+    const server = await bleDevice.gatt.connect();
+    const svc    = await server.getPrimaryService(SERVICE_UUID);
+    notifyChar   = await svc.getCharacteristic(NOTIFY_UUID);
+    await notifyChar.startNotifications();
+    notifyChar.addEventListener('characteristicvaluechanged', onNotify);
+    connected = true;
+    btn.textContent = '✓ Connected'; btn.disabled = false;
+    btn.classList.add('connected');
+    log('BLE connected ✅', 'clear');
+    setStatus('clear', '📡', 'CONNECTED', 'Point stick at objects');
+
+    // Remind user to unlock vibration if not done yet
+    if (!vibrationUnlocked) {
+      log('⚠️ Tap the yellow banner to unlock vibration!', 'notice');
+    }
+  } catch(e) {
+    btn.textContent = '📡 Connect SmartStick';
+    btn.disabled = false;
+    log('BLE failed: ' + e.message, 'danger');
+  }
+}
+
+function onDisconnect() {
+  connected = false;
+  const btn = document.getElementById('btn-ble');
+  btn.textContent = '📡 Connect SmartStick';
+  btn.classList.remove('connected'); btn.disabled = false;
+  setStatus('', '📡', 'DISCONNECTED', '—');
+  log('Disconnected', 'warn');
+}
+
+// ── HANDLE INCOMING BLE NOTIFICATION ────────────────────────
+function onNotify(e) {
+  const msg = new TextDecoder().decode(e.target.value).trim();
+  log('← ' + msg);
+
+  if      (msg === 'OBS:CLEAR')  handleLevel('CLEAR');
+  else if (msg === 'OBS:NOTICE') handleLevel('NOTICE');
+  else if (msg === 'OBS:WARN')   handleLevel('WARN');
+  else if (msg === 'OBS:DANGER') handleLevel('DANGER');
+}
+
+function handleLevel(level) {
+  // Update UI
+  const config = {
+    CLEAR:  { cls:'clear',  emoji:'✅', label:'CLEAR',   dist:'No obstacles' },
+    NOTICE: { cls:'notice', emoji:'🟡', label:'NOTICE',  dist:'< 150cm nearby' },
+    WARN:   { cls:'warn',   emoji:'🟠', label:'WARNING', dist:'< 80cm — slow down' },
+    DANGER: { cls:'danger', emoji:'🔴', label:'DANGER',  dist:'< 30cm — STOP!' },
+  };
+  const c = config[level];
+  setStatus(c.cls, c.emoji, c.label, c.dist);
+
+  // Vibrate
+  const pattern = VIBE[level];
+  if (pattern) {
+    if (!vibrationUnlocked) {
+      log('⚠️ Tap yellow banner to enable vibration!', 'notice');
+      return;
+    }
+    const ok = navigator.vibrate(pattern);
+    log('📳 Vibrate ' + level + (ok ? ' ✅' : ' ❌ failed'), level.toLowerCase());
+  } else {
+    navigator.vibrate(0); // stop any ongoing vibration
+    log('Level: ' + level, 'clear');
+  }
+}
+
+function setStatus(cls, emoji, label, dist) {
+  document.getElementById('status-circle').className = cls;
+  document.getElementById('status-emoji').textContent = emoji;
+  document.getElementById('status-label').textContent = label;
+  document.getElementById('status-dist').textContent  = dist;
+}
+
+function log(msg, cls) {
+  const el   = document.getElementById('log');
+  const line = document.createElement('div');
+  if (cls) line.className = 'log-' + cls;
+  line.textContent = new Date().toLocaleTimeString() + '  ' + msg;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+}
+
+// Check vibration support on load
+window.addEventListener('load', () => {
+  if (!navigator.vibrate) {
+    document.getElementById('vibe-unlock').innerHTML =
+      '❌ Vibration API not supported on this browser/device';
+    log('Vibration not supported', 'danger');
+  } else {
+    log('Vibration API available ✅ — tap yellow banner to unlock', 'info');
+  }
+});
+</script>
+</body>
+</html>
